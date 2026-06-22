@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# Internal planning docs — not for public repo
+TokenTrail MLP.docx
+TokenTrail MLP.pdf

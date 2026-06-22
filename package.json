@@ -1,0 +1,45 @@
+{
+  "name": "tokenledger",
+  "version": "0.1.1",
+  "description": "Track token usage by developer-labeled work segment across AI coding agents.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prasanna-gyde/tokenledger.git"
+  },
+  "homepage": "https://github.com/prasanna-gyde/tokenledger#readme",
+  "bugs": {
+    "url": "https://github.com/prasanna-gyde/tokenledger/issues"
+  },
+  "type": "commonjs",
+  "bin": {
+    "tokenledger": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "scripts"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "postinstall": "node scripts/fix-pty-permissions.js",
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^12.1.0",
+    "node-pty": "^1.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
