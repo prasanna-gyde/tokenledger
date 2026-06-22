@@ -7,10 +7,10 @@ question session-level totals can't: **where did the tokens go inside this sessi
 
 ## Why
 
-A long coding session is really many tasks back to back: `learn arbr`, `fix tests`,
-`refactor`, `pull changes on gcp`. Session-level usage is too coarse to tell you which
-of those actually burned the tokens. TokenLedger lets you label segments as you work
-and reports exact token usage and estimated cost per segment.
+A long coding session is really many tasks back to back: `add feature`, `write tests`,
+`refactor parser`, `update deps`. Session-level usage is too coarse to tell you which of
+those actually burned the tokens. TokenLedger lets you label segments as you work and
+reports exact token usage and estimated cost per segment.
 
 It also separates raw **token volume** from **fresh** tokens and real **cost**. With
 prompt caching a segment can touch a huge amount of context (high volume) while costing
@@ -58,7 +58,7 @@ Mark segments by typing **in the same Claude terminal** (no slash). Starting a n
 segment auto-closes the previous one.
 
 ```text
-tl start pull changes on gcp
+tl start write tests
 tl usage
 tl end
 tl summary
@@ -75,28 +75,28 @@ Session total: 194K volume | 15K fresh | $0.20 (exact tokens, estimated cost)
 Input: 4K | Output: 1K | Cache read: 179K | Cache write: 9K
 
 Segments:
-1. learn arbr
+1. refactor parser
    71K volume | 14K fresh | $0.12 | 1m 44s | cache-heavy
    Input: 4K | Output: 579 | Cache read: 57K | Cache write: 9K
-2. npm package
+2. write tests
    123K volume | 1K fresh | $0.08 | 43s | cache-heavy
    Input: 10 | Output: 637 | Cache read: 122K | Cache write: 425
 
 Token insight:
-"npm package" accounted for 64% of token volume, mostly from cache read.
+"write tests" accounted for 64% of token volume, mostly from cache read.
 
 Cost insight:
-"learn arbr" was the most expensive segment at $0.12.
+"refactor parser" was the most expensive segment at $0.12.
 ```
 
-Note how `npm package` has the **most volume** (123K) but the **least cost** ($0.08): it
+Note how `write tests` has the **most volume** (123K) but the **least cost** ($0.08): it
 mostly replayed cached context. Volume and cost are reported as separate concepts, never
 conflated.
 
 At segment end you also get an immediate readout:
 
 ```text
-✓ Segment ended: npm package  cache-heavy
+✓ Segment ended: write tests  cache-heavy
 (captured by TokenLedger)
 Token volume: 123K
 Fresh tokens: 1K
