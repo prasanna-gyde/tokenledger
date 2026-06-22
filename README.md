@@ -4,18 +4,69 @@ Track token usage by developer-labeled work segment across AI coding agents.
 
 TokenLedger wraps your AI coding agent (Claude Code in this release) and answers the
 question session-level totals can't: **where did the tokens go inside this session?**
-You mark work segments — `learn arbr`, `fix tests`, `refactor` — and TokenLedger
-reports exact token usage and estimated cost per segment, separating raw **token
-volume** from **fresh** tokens and real **cost**.
 
-This distinction matters: with prompt caching, a segment can touch a huge amount of
-context (high volume) while costing almost nothing (cache reads are ~10x cheaper than
-fresh input). TokenLedger makes that legible instead of alarming.
+## Why
 
-## Example
+A long coding session is really many tasks back to back: `learn arbr`, `fix tests`,
+`refactor`, `pull changes on gcp`. Session-level usage is too coarse to tell you which
+of those actually burned the tokens. TokenLedger lets you label segments as you work
+and reports exact token usage and estimated cost per segment.
 
-After a short session with two labeled segments, `tl summary` (or `tokenledger last`)
-prints:
+It also separates raw **token volume** from **fresh** tokens and real **cost**. With
+prompt caching a segment can touch a huge amount of context (high volume) while costing
+almost nothing, because cache reads are about 10x cheaper than fresh input. TokenLedger
+makes that legible instead of alarming.
+
+## Install
+
+```bash
+npm install -g tokenledger
+```
+
+Requires **Node.js 18+**. Check yours with `node -v`; if it is older, install a current
+version (for example `nvm install 20 && nvm use 20`).
+
+Local development:
+
+```bash
+npm install
+npm run build
+npm link
+```
+
+## Setup
+
+One time per project, enable the in-terminal commands:
+
+```bash
+tokenledger init
+```
+
+This installs a Claude Code `UserPromptSubmit` hook in `.claude/settings.local.json`
+(gitignored).
+
+## Use
+
+Launch your agent through TokenLedger (agent flags pass through):
+
+```bash
+tokenledger claude
+tokenledger claude --dangerously-skip-permissions
+```
+
+Mark segments by typing **in the same Claude terminal** (no slash). Starting a new
+segment auto-closes the previous one.
+
+```text
+tl start pull changes on gcp
+tl usage
+tl end
+tl summary
+```
+
+## Example output
+
+`tl summary` (or `tokenledger last`) prints:
 
 ```text
 TokenLedger summary
@@ -36,57 +87,13 @@ Token insight:
 
 Cost insight:
 "learn arbr" was the most expensive segment at $0.12.
-
-Trail note:
-"npm package" had the highest token burn rate at 172K tokens/min, mostly from cache reads.
 ```
 
-Note how `npm package` has the **most volume** (123K) but the **least cost** ($0.08) —
-it mostly replayed cached context. Token volume and cost are reported as separate
-concepts, never conflated.
+Note how `npm package` has the **most volume** (123K) but the **least cost** ($0.08): it
+mostly replayed cached context. Volume and cost are reported as separate concepts, never
+conflated.
 
-## Install
-
-```bash
-npm install -g tokenledger
-```
-
-Local development:
-
-```bash
-npm install
-npm run build
-npm link
-```
-
-## Usage
-
-One-time per project, enable in-terminal commands:
-
-```bash
-tokenledger init
-```
-
-This installs a Claude Code `UserPromptSubmit` hook in `.claude/settings.local.json`
-(gitignored). Then launch Claude (agent flags pass through):
-
-```bash
-tokenledger claude
-tokenledger claude --dangerously-skip-permissions
-```
-
-Mark segments by typing **in the same Claude terminal** (no slash — these are
-intercepted by the hook, never sent to the model, and cost zero tokens):
-
-```text
-tl start learn arbr
-tl usage
-tl end
-tl summary
-```
-
-Starting a new segment auto-closes the previous one. At segment end you get an
-immediate readout:
+At segment end you also get an immediate readout:
 
 ```text
 ✓ Segment ended: npm package  cache-heavy
@@ -97,21 +104,7 @@ Estimated cost: $0.08
 Duration: 43s
 ```
 
-> **About the "operation blocked by hook" line.** When you type a `tl` command,
-> Claude Code shows `UserPromptSubmit operation blocked by hook` above TokenLedger's
-> output. That is expected and benign: it simply means the command was **captured by
-> TokenLedger and not sent to Claude** (0 tokens). TokenLedger cannot suppress that line
-> — it is Claude Code's own UI for any intercepted prompt.
-
-Review past usage:
-
-```bash
-tokenledger last     # most recent session summary
-tokenledger today    # today's totals (volume | fresh | cost) across sessions
-tokenledger uninstall # remove the in-terminal hook from this project
-```
-
-## Terminology
+## What the numbers mean
 
 | Term             | Definition                                                   |
 | ---------------- | ------------------------------------------------------------ |
@@ -120,26 +113,47 @@ tokenledger uninstall # remove the in-terminal hook from this project
 | **Cost**         | estimated USD spend, from per-model pricing                  |
 | **Cache-heavy**  | cache reads are more than 70% of a segment's token volume    |
 
-Insights are split deliberately: a **token insight** ranks by volume, a **cost
-insight** ranks by spend. They can name different segments — that is the point.
+Insights are split deliberately: a **token insight** ranks by volume, a **cost insight**
+ranks by spend. They can name different segments, which is the point.
+
+## Claude hook note
+
+When you type a `tl` command, Claude Code shows `UserPromptSubmit operation blocked by
+hook` above TokenLedger's output. That is expected and benign: it means the command was
+**captured by TokenLedger and not sent to Claude** (0 tokens). TokenLedger cannot
+suppress that line, because it is Claude Code's own UI for any intercepted prompt.
+
+## Commands
+
+```bash
+tokenledger init      # enable the in-terminal hook for this project
+tokenledger claude    # launch Claude Code with tracking
+tokenledger last      # most recent session summary
+tokenledger today     # today's totals (volume | fresh | cost) across sessions
+tokenledger uninstall # remove the in-terminal hook from this project
+```
 
 ## How it works
 
-- **Exact tokens.** Claude Code writes a per-session JSONL transcript with exact
-  `usage` per assistant message. TokenLedger reads it and attributes usage to
-  segments by timestamp. Token counts are exact; only cost is estimated.
-- **Segments are time-ranges.** Starting a new segment auto-closes the previous
-  one. Usage before the first segment, or between segments, goes to `Unsegmented`.
+- **Exact tokens.** Claude Code writes a per-session JSONL transcript with exact `usage`
+  per assistant message. TokenLedger reads it and attributes usage to segments by
+  timestamp. Token counts are exact; only cost is estimated.
+- **Segments are time-ranges.** Starting a new segment auto-closes the previous one.
+  Usage before the first segment, or between segments, goes to `Unsegmented`.
 - **In-terminal control via a hook.** `tl ...` commands are caught by a Claude Code
-  `UserPromptSubmit` hook that runs `tokenledger hook`, applies the command, and
-  blocks the prompt so it never reaches the model (hence the "blocked by hook" line).
+  `UserPromptSubmit` hook that runs `tokenledger hook`, applies the command, and blocks
+  the prompt so it never reaches the model.
 - **Single-segment sessions stay honest.** Comparative language ("highest", "most
-  expensive", "% of session") is only used with two or more segments; a lone segment
-  gets a plain descriptive note.
-- **File-based coordination.** Session state lives under `~/.tokenledger/sessions/`;
-  the running process and the hook coordinate through `~/.tokenledger/active.json`.
-- **Multi-agent ready.** Agent-specific logic is isolated in adapters
-  (`src/adapters`). Codex and OpenCode are stubbed for a future release.
+  expensive", "% of session") is only used with two or more segments.
+
+## Limitations
+
+- **Claude Code only in this release.** Agent-specific logic is isolated in adapters
+  (`src/adapters`); Codex and OpenCode are stubbed for a future release.
+- **Cost is estimated.** Token counts are exact; cost comes from per-model rates in
+  `src/core/cost.ts`. Unknown models report "cost unavailable" rather than guessing.
+- **Requires Claude Code local usage data.** TokenLedger reads the local session
+  transcript, so usage is attributed only when that data is present.
 
 ## Development
 
@@ -147,6 +161,3 @@ insight** ranks by spend. They can name different segments — that is the point
 npm test          # run the unit tests (vitest)
 npm run build     # compile TypeScript to dist/
 ```
-
-Cost rates live in one place: `src/core/cost.ts`. Unknown models report
-"cost unavailable" rather than guessing.
