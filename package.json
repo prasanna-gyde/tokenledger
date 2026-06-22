@@ -1,6 +1,6 @@
 {
   "name": "tokenledger",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Track token usage by developer-labeled work segment across AI coding agents.",
   "license": "MIT",
   "repository": {

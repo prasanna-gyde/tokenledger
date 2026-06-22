@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 
 const HOOK_COMMAND = "tokenledger hook";
@@ -15,6 +16,45 @@ const HOOK_COMMAND_MATCHERS = ["tokenledger hook", "tokentrail hook"];
 
 function settingsLocalPath(cwd: string): string {
   return path.join(cwd, ".claude", "settings.local.json");
+}
+
+/**
+ * User-global Claude settings (`~/.claude/settings.json`). A hook installed here
+ * fires for EVERY project, so init must account for it: adding a project-level copy
+ * on top would fire our hook twice per prompt (the phantom-segment bug). Overridable
+ * via TOKENLEDGER_GLOBAL_SETTINGS so tests can isolate from the real home directory.
+ */
+function globalSettingsPath(): string {
+  return process.env.TOKENLEDGER_GLOBAL_SETTINGS || path.join(os.homedir(), ".claude", "settings.json");
+}
+
+/** Read the UserPromptSubmit hook groups from the global settings file (empty if none). */
+function globalGroups(): any[] {
+  const f = globalSettingsPath();
+  if (!fs.existsSync(f)) return [];
+  const groups = readJson(f)?.hooks?.UserPromptSubmit;
+  return Array.isArray(groups) ? groups : [];
+}
+
+/** True if the global settings already install our CURRENT hook command. */
+function globalHasCurrentHook(): boolean {
+  return globalGroups().some(
+    (g) => Array.isArray(g?.hooks) && g.hooks.some((h: any) => String(h?.command).includes(HOOK_COMMAND)),
+  );
+}
+
+/** True if the global settings carry a stale/legacy-named hook of ours. */
+function globalHasStaleHook(): boolean {
+  return globalGroups().some(groupIsStale);
+}
+
+/** Strip empty hook containers, then write the settings file. */
+function persistSettings(file: string, settings: any): void {
+  if (Array.isArray(settings?.hooks?.UserPromptSubmit) && settings.hooks.UserPromptSubmit.length === 0) {
+    delete settings.hooks.UserPromptSubmit;
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(settings, null, 2) + "\n", "utf8");
 }
 
 function readJson(file: string): any {
@@ -47,9 +87,18 @@ function groupIsStale(g: any): boolean {
   );
 }
 
-/** True if a TokenLedger UserPromptSubmit hook is installed for this project. */
+/**
+ * True if a TokenLedger UserPromptSubmit hook is active for this project — whether
+ * installed at the project level (`.claude/settings*.json`) or user-globally
+ * (`~/.claude/settings.json`, which applies to every project).
+ */
 export function isHookInstalled(cwd: string): boolean {
-  for (const f of [path.join(cwd, ".claude", "settings.local.json"), path.join(cwd, ".claude", "settings.json")]) {
+  const files = [
+    path.join(cwd, ".claude", "settings.local.json"),
+    path.join(cwd, ".claude", "settings.json"),
+    globalSettingsPath(),
+  ];
+  for (const f of files) {
     if (fs.existsSync(f) && hooksHaveTokenLedger(readJson(f))) return true;
   }
   return false;
@@ -72,6 +121,31 @@ export function initCommand(): void {
   const staleCount = groups.filter(groupIsStale).length;
   if (staleCount > 0) {
     groups = settings.hooks.UserPromptSubmit = groups.filter((g) => !groupIsStale(g));
+  }
+
+  // If our hook is already installed user-globally (~/.claude/settings.json), it fires
+  // for this project too. A project-level copy on top would double-fire on every prompt,
+  // so don't add one — and remove any redundant project-level hook that's already there.
+  if (globalHasCurrentHook()) {
+    const redundant = groups.filter(groupHasOurHook).length;
+    if (redundant > 0) {
+      settings.hooks.UserPromptSubmit = groups.filter((g) => !groupHasOurHook(g));
+    }
+    if (redundant > 0 || staleCount > 0) persistSettings(file, settings);
+
+    console.log(chalk.green("TokenLedger is already enabled globally (~/.claude/settings.json) for every project."));
+    if (redundant + staleCount > 0) {
+      console.log(`Removed ${redundant + staleCount} redundant project-level hook(s) that would have double-fired.`);
+    }
+    if (globalHasStaleHook()) {
+      console.log(
+        chalk.yellow(
+          "Heads up: your global settings use a legacy hook name — edit ~/.claude/settings.json to use `tokenledger hook`.",
+        ),
+      );
+    }
+    printUsage();
+    return;
   }
 
   const alreadyCurrent = groups.some(
