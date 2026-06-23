@@ -35,6 +35,12 @@ export const SegmentSchema = z.object({
   /** Computed token delta attributed to this segment (filled at finalize time). */
   delta: TokenUsageSchema.nullable().default(null),
   status: SegmentStatusSchema,
+  /** Git context, when the session runs in a repo (optional; older files omit). */
+  gitBranchAtStart: z.string().optional(),
+  gitHeadAtStart: z.string().optional(),
+  gitHeadAtEnd: z.string().optional(),
+  /** Issue id parsed from the segment name or branch (e.g. "PROJ-123"). */
+  ticket: z.string().optional(),
 });
 export type Segment = z.infer<typeof SegmentSchema>;
 
@@ -65,6 +71,11 @@ export const SessionSchema = z.object({
   total: TokenUsageSchema.nullable().default(null),
   segments: z.array(SegmentSchema).default([]),
   insights: z.array(InsightSchema).default([]),
+  /** Git context captured at session start (optional; older files omit). */
+  gitBranch: z.string().optional(),
+  gitHeadAtStart: z.string().optional(),
+  gitRemoteUrl: z.string().optional(),
+  gitRoot: z.string().optional(),
 });
 export type Session = z.infer<typeof SessionSchema>;
 

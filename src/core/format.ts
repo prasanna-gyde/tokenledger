@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { drawCard, padStartVisible, truncVisible, splitCols, visibleLen } from "./box";
 import { ComputedView, SegmentView } from "./compute";
 import { Session, TokenUsage } from "./types";
 
@@ -124,8 +125,124 @@ function renderSegmentList(segments: SegmentView[]): string {
   return lines.join("\n");
 }
 
-/** Render the full `/tl summary` / final summary view (insights included). */
+/**
+ * Render the summary. On an interactive terminal of sufficient width, draw the
+ * shareable bordered card; otherwise (piped output, the hook's stripped/yellow
+ * block, or a very narrow terminal) fall back to the plain layout.
+ */
 export function renderSummary(session: Session, view: ComputedView): string {
+  const cols = process.stdout.columns ?? 0;
+  if (view.trackingAvailable && process.stdout.isTTY && cols >= 46) {
+    return renderSummaryCard(session, view);
+  }
+  return renderSummaryPlain(session, view);
+}
+
+/** Compact breakdown for the card: cache read+write folded into one figure. */
+function cardBreakdown(u: TokenUsage): string {
+  return (
+    `Input ${formatTokens(u.inputTokens)} · ` +
+    `Output ${formatTokens(u.outputTokens)} · ` +
+    `Cache ${formatTokens(u.cacheReadTokens + u.cacheWriteTokens)}`
+  );
+}
+
+/** The shareable bordered summary card. Assumes `view.trackingAvailable`. */
+export function renderSummaryCard(session: Session, view: ComputedView): string {
+  // Totals: headline volume/fresh/cost, then the compact breakdown.
+  const cost =
+    view.total.estimatedCostUsd !== undefined
+      ? chalk.green.bold(formatCost(view.total.estimatedCostUsd))
+      : chalk.dim("$ n/a");
+  const totals = [
+    `${chalk.bold(formatTokens(view.total.totalTokens))} volume    ${formatTokens(freshTokens(view.total))} fresh    ${cost}`,
+    chalk.dim(cardBreakdown(view.total)),
+  ];
+
+  // Segments: numbered, name truncated, vol/cost/time in aligned columns.
+  const segments: string[] = [];
+  if (view.segments.length) {
+    const nameW = Math.min(22, Math.max(8, ...view.segments.map((s) => visibleLen(s.name))));
+    view.segments.forEach((seg, i) => {
+      const num = padStartVisible(String(i + 1), 2);
+      const name = truncVisible(seg.name, nameW).padEnd(nameW);
+      const vol = padStartVisible(formatTokens(seg.usage.totalTokens), 5);
+      const cst = padStartVisible(formatCost(seg.usage.estimatedCostUsd), 6);
+      const time = padStartVisible(formatDuration(seg.durationMs) || "—", 7);
+      segments.push(`${num}  ${name}  ${vol}  ${cst}  ${time}`);
+    });
+  }
+
+  // Footer: a derived highlight (top spender across real segments) + a brand line.
+  const footer: string[] = [];
+  const real = view.segments.filter((s) => !s.isUnsegmented);
+  if (real.length >= 2) {
+    const top = real.reduce((a, b) =>
+      (b.usage.estimatedCostUsd ?? -1) > (a.usage.estimatedCostUsd ?? -1) ? b : a,
+    );
+    if (top.usage.estimatedCostUsd !== undefined) {
+      footer.push(chalk.dim("most spend → ") + top.name + chalk.dim(` (${formatCost(top.usage.estimatedCostUsd)})`));
+    }
+  }
+  footer.push(chalk.dim("tokenledger · tokens by segment"));
+
+  // Header right-aligns the model to the card width, so size it from the content.
+  const brand = chalk.bold("◆ TokenLedger");
+  const model = chalk.dim(view.model ?? "model n/a");
+  const contentMax = [...totals, ...segments, ...footer].reduce((m, l) => Math.max(m, visibleLen(l)), 0);
+  const headW = Math.max(contentMax, visibleLen(brand) + visibleLen(model) + 1);
+  const dur = formatDuration(session.durationMs);
+  const header = [splitCols(brand, model, headW), chalk.dim(`Session summary${dur ? ` · ${dur}` : ""}`)];
+
+  const groups = [header, totals];
+  if (segments.length) groups.push(segments);
+  groups.push(footer);
+  return drawCard(groups);
+}
+
+export interface MarkdownOpts {
+  /** Include cost figures (default true). Set false to share volume/time only. */
+  cost?: boolean;
+}
+
+/** Escape table-breaking pipes in a free-text cell. */
+function mdCell(s: string): string {
+  return s.replace(/\|/g, "\\|");
+}
+
+/**
+ * Canonical shareable Markdown for a session (PR comments, future tracker push).
+ * Reuses the same figures as the card. `cost:false` drops dollar amounts.
+ */
+export function renderSummaryMarkdown(session: Session, view: ComputedView, opts: MarkdownOpts = {}): string {
+  const showCost = opts.cost !== false;
+  const lines: string[] = ["### TokenLedger: session summary"];
+
+  const dur = formatDuration(session.durationMs);
+  const branch = session.gitBranch ? ` · \`${session.gitBranch}\`` : "";
+  const costPart = showCost ? ` · **${formatCost(view.total.estimatedCostUsd)}**` : "";
+  lines.push(
+    `**${formatTokens(view.total.totalTokens)}** volume · ` +
+      `${formatTokens(freshTokens(view.total))} fresh${costPart}` +
+      `${dur ? ` · ${dur}` : ""}${branch}`,
+  );
+
+  if (view.segments.length) {
+    lines.push("");
+    lines.push(showCost ? "| # | segment | volume | cost | time |" : "| # | segment | volume | time |");
+    lines.push(showCost ? "|--:|---|--:|--:|--:|" : "|--:|---|--:|--:|");
+    view.segments.forEach((seg, i) => {
+      const cells = [String(i + 1), mdCell(seg.name), formatTokens(seg.usage.totalTokens)];
+      if (showCost) cells.push(formatCost(seg.usage.estimatedCostUsd));
+      cells.push(formatDuration(seg.durationMs) || "—");
+      lines.push(`| ${cells.join(" | ")} |`);
+    });
+  }
+  return lines.join("\n");
+}
+
+/** Plain (non-card) summary: the fallback layout, insights included. */
+export function renderSummaryPlain(session: Session, view: ComputedView): string {
   const lines: string[] = [];
   lines.push(chalk.bold("TokenLedger summary"));
   lines.push("");

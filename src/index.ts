@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 import { adapterIds } from "./adapters/index";
+import { commitNoteCommand } from "./commands/commitNote";
+import { initGitCommand, uninstallGitCommand } from "./commands/gitHook";
 import { hookCommand } from "./commands/hook";
 import { initCommand, uninstallCommand } from "./commands/init";
 import { lastCommand } from "./commands/last";
 import { runCommand } from "./commands/run";
+import { shareCommand } from "./commands/share";
 import { sidecarCommand } from "./commands/sidecar";
 import { todayCommand } from "./commands/today";
 
-const VERSION = "0.1.0";
+const VERSION: string = require("../package.json").version;
 
 const HELP = `TokenLedger — token usage by developer-labeled work segment.
 
@@ -17,6 +20,9 @@ Usage:
                                        (agents: ${adapterIds().join(", ")}; Claude supported now)
   tokenledger last                      Show the most recent session summary
   tokenledger today                     Show today's total usage
+  tokenledger share [--pr] [--no-cost]  Print the last summary as Markdown, or post it to the branch's PR
+  tokenledger init-git                  Add an opt-in commit-message cost trailer (prepare-commit-msg hook)
+  tokenledger uninstall-git             Remove the commit-message cost trailer
   tokenledger uninstall                 Remove the in-terminal hook from this project
   tokenledger --help | --version
 
@@ -75,6 +81,22 @@ function main(): void {
       return;
     case "today":
       todayCommand();
+      return;
+    case "share":
+      shareCommand({ pr: rest.includes("--pr"), cost: !rest.includes("--no-cost") });
+      return;
+    case "init-git":
+      initGitCommand();
+      return;
+    case "uninstall-git":
+      uninstallGitCommand();
+      return;
+    case "commit-note":
+      commitNoteCommand({
+        ifActive: rest.includes("--if-active"),
+        quiet: rest.includes("--quiet"),
+        cost: !rest.includes("--no-cost"),
+      });
       return;
     default:
       console.error(`Unknown command: ${cmd}\n`);

@@ -3,6 +3,7 @@ import { findActiveTranscript, snapshotTranscripts } from "../adapters/claude";
 import { getAdapter } from "../adapters/index";
 import { computeView } from "../core/compute";
 import { renderSummary } from "../core/format";
+import { gitContext, headSha } from "../core/git";
 import { generateInsights } from "../core/insights";
 import { endSegment } from "../core/segments";
 import {
@@ -41,6 +42,7 @@ export async function runCommand(agentId: string, passArgs: string[]): Promise<v
   ensureDirs();
   const cwd = process.cwd();
   const startDate = new Date();
+  const git = gitContext(cwd);
   const session: Session = {
     sessionId: newSessionId(startDate),
     agent: adapter.id,
@@ -57,6 +59,10 @@ export async function runCommand(agentId: string, passArgs: string[]): Promise<v
     total: null,
     segments: [],
     insights: [],
+    gitBranch: git.branch,
+    gitHeadAtStart: git.head,
+    gitRemoteUrl: git.remoteUrl,
+    gitRoot: git.root,
   };
   saveSession(session);
   writeActivePointer({
@@ -134,7 +140,8 @@ export function finalizeSession(
 ): Session | null {
   return mutateSessionFile(sessionId, (s) => {
     const endIso = new Date().toISOString();
-    endSegment(s, endIso);
+    const closed = endSegment(s, endIso);
+    if (closed) closed.gitHeadAtEnd = headSha(s.gitRoot ?? s.cwd);
     s.endedAt = endIso;
     s.durationMs = Date.parse(endIso) - Date.parse(s.startedAt);
     s.status = status;

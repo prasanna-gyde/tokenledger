@@ -130,8 +130,28 @@ tokenledger init      # enable the in-terminal hook for this project
 tokenledger claude    # launch Claude Code with tracking
 tokenledger last      # most recent session summary
 tokenledger today     # today's totals (volume | fresh | cost) across sessions
+tokenledger share     # print the last summary as Markdown (writes ~/.tokenledger/last-summary.md)
 tokenledger uninstall # remove the in-terminal hook from this project
 ```
+
+## Sharing to git
+
+The exit summary is a bordered card meant to be screenshotted. To share it as text or
+attach it to your work:
+
+```bash
+tokenledger share            # Markdown summary, with a branch chip when run in a repo
+tokenledger share --pr       # post that Markdown as a comment on the current branch's PR (uses gh)
+tokenledger share --no-cost  # omit dollar figures (e.g. for a public PR)
+
+tokenledger init-git         # opt-in: append a cost trailer to commit messages made
+                             #         during an active session (prepare-commit-msg hook)
+tokenledger uninstall-git    # remove that commit trailer
+```
+
+When TokenLedger runs inside a git repo it records the branch, HEAD, remote, and any
+`PROJ-123`-style ticket id parsed from the segment name or branch, so segment cost stays
+tied to where the work lives.
 
 ## How it works
 

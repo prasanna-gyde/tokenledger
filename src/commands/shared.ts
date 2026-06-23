@@ -7,6 +7,7 @@ import {
   renderSummary,
   renderUsage,
 } from "../core/format";
+import { currentBranch, headSha, parseTicket } from "../core/git";
 import { generateInsights } from "../core/insights";
 import { activeSegment, endSegment, startSegment } from "../core/segments";
 import { loadSession, saveSession } from "../core/storage";
@@ -65,6 +66,13 @@ function doStart(sessionId: string, name: string): string {
   const updated = mutateSessionFile(sessionId, (s) => {
     const res = startSegment(s, name);
     closedId = res.closedPrevious?.id;
+    if (res.deduped) return;
+    const cwd = s.gitRoot ?? s.cwd;
+    const head = headSha(cwd);
+    if (res.closedPrevious) res.closedPrevious.gitHeadAtEnd = head;
+    res.started.gitBranchAtStart = currentBranch(cwd);
+    res.started.gitHeadAtStart = head;
+    res.started.ticket = parseTicket(res.started.name, res.started.gitBranchAtStart);
   });
   if (!updated) return notFound();
 
@@ -87,6 +95,7 @@ function doEnd(sessionId: string): string {
   let endedSeg: Segment | null = null;
   const updated = mutateSessionFile(sessionId, (s) => {
     endedSeg = endSegment(s);
+    if (endedSeg) (endedSeg as Segment).gitHeadAtEnd = headSha(s.gitRoot ?? s.cwd);
   });
   if (!updated) return notFound();
   if (!endedSeg) return "No active segment to end.";

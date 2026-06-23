@@ -20,6 +20,19 @@ export function activePointerPath(): string {
   return path.join(rootDir(), "active.json");
 }
 
+/** Where `tokenledger share` writes the latest Markdown summary. */
+export function lastSummaryPath(): string {
+  return path.join(rootDir(), "last-summary.md");
+}
+
+/** The most recent session by start time, or null if none. */
+export function latestSession(): Session | null {
+  const { sessions } = listSessions();
+  if (!sessions.length) return null;
+  sessions.sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
+  return sessions[0];
+}
+
 export function ensureDirs(): void {
   fs.mkdirSync(sessionsDir(), { recursive: true });
 }
