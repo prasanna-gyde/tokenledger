@@ -12,20 +12,12 @@ import {
   sessionPath,
   writeActivePointer,
 } from "../core/storage";
-import { parseTtCommand } from "../core/ttcommand";
 import { Session } from "../core/types";
-import { runWithPty } from "../pty/interceptor";
-import { runInherited } from "../pty/launchInherit";
+import { runInherited } from "../launch/launchInherit";
 import { isHookInstalled } from "./init";
-import { applyTt, mutateSessionFile, newSessionId } from "./shared";
+import { mutateSessionFile, newSessionId } from "./shared";
 
-export interface RunOptions {
-  live?: boolean;
-  /** Experimental: intercept in-session /tl commands via a PTY. */
-  intercept?: boolean;
-}
-
-export async function runCommand(agentId: string, passArgs: string[], opts: RunOptions = {}): Promise<void> {
+export async function runCommand(agentId: string, passArgs: string[]): Promise<void> {
   const adapter = getAdapter(agentId);
   if (!adapter) {
     console.error(`Unknown agent: ${agentId}. Supported: claude`);
@@ -76,8 +68,6 @@ export async function runCommand(agentId: string, passArgs: string[], opts: RunO
     startedAt: session.startedAt,
   });
 
-  const interactive = !!process.stdin.isTTY;
-  const useIntercept = !!opts.intercept && interactive;
   const hookOn = adapter.id === "claude" && isHookInstalled(cwd);
   console.log(chalk.bold("TokenLedger started"));
   console.log(`Tracking ${adapter.displayName} token usage by segment.`);
@@ -87,13 +77,6 @@ export async function runCommand(agentId: string, passArgs: string[], opts: RunO
   } else {
     console.log(chalk.dim("\nTip: run `tokenledger init` once to mark segments by typing `tl start ...` here."));
     console.log(chalk.dim('Or from any terminal: tokenledger start "fix tests" / usage / end / summary'));
-  }
-  if (useIntercept) {
-    console.log(
-      chalk.yellow(
-        "\nExperimental --intercept enabled; it may not work with newer agent keyboard modes.",
-      ),
-    );
   }
   console.log(`\nStarting ${adapter.displayName}...\n`);
 
@@ -129,30 +112,7 @@ export async function runCommand(agentId: string, passArgs: string[], opts: RunO
     });
   }
 
-  const result = useIntercept
-    ? await runWithPty({
-        file: exe,
-        args: passArgs,
-        cwd,
-        env: process.env,
-        interactive: true,
-        onSpawn: (pid) => {
-          writeActivePointer({
-            sessionId: session.sessionId,
-            sessionFile: sessionPath(session.sessionId),
-            transcriptPath: null,
-            pid,
-            agent: adapter.id,
-            startedAt: session.startedAt,
-          });
-        },
-        onCommand: (raw) => {
-          const out = applyTt(session.sessionId, parseTtCommand(raw));
-          // Raw terminal mode needs CRLF line endings.
-          process.stdout.write("\r\n" + out.replace(/\n/g, "\r\n") + "\r\n");
-        },
-      })
-    : await runInherited({ file: exe, args: passArgs, cwd, env: process.env });
+  const result = await runInherited({ file: exe, args: passArgs, cwd, env: process.env });
 
   if (poll) clearInterval(poll);
 

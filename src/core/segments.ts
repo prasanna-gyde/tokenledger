@@ -22,10 +22,10 @@ export interface StartResult {
 
 /**
  * Window within which an identical `start` is treated as a re-fire of the same
- * command rather than a deliberate restart. Two interception paths (the
- * UserPromptSubmit hook and the PTY interceptor — or two registered hooks) can
- * each process the same `tl start` line, which would otherwise create a phantom
- * zero-token, zero-duration segment that is instantly closed by the second start.
+ * command rather than a deliberate restart. Two registered UserPromptSubmit hooks
+ * (e.g. a user-global and a project hook) can each process the same `tl start`
+ * line, which would otherwise create a phantom zero-token, zero-duration segment
+ * that is instantly closed by the second start.
  */
 const DEDUP_WINDOW_MS = 2_000;
 

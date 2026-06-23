@@ -42,7 +42,7 @@ function sessionPathFor(sessionId: string): string {
 
 /**
  * Apply an in-session/sidecar command to a session and return rendered output.
- * Shared by the PTY interceptor (`/tl ...`) and sidecar subcommands.
+ * Shared by the UserPromptSubmit hook (`tl ...`) and sidecar subcommands.
  */
 export function applyTt(sessionId: string, cmd: TtCommand): string {
   switch (cmd.verb) {

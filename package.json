@@ -1,6 +1,6 @@
 {
   "name": "tokenledger",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Track token usage by developer-labeled work segment across AI coding agents.",
   "license": "MIT",
   "repository": {
@@ -28,14 +28,12 @@
     "tokenledger": "dist/index.js"
   },
   "files": [
-    "dist",
-    "scripts"
+    "dist"
   ],
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "postinstall": "node scripts/fix-pty-permissions.js",
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
@@ -45,7 +43,6 @@
   "dependencies": {
     "chalk": "^4.1.2",
     "commander": "^12.1.0",
-    "node-pty": "^1.0.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

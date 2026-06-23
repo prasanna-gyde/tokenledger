@@ -43,12 +43,8 @@ function main(): void {
   }
 
   if (adapterIds().includes(cmd as any)) {
-    // Everything after the agent name passes through to the agent; --live and
-    // --intercept are TokenLedger's own flags.
-    const live = rest.includes("--live");
-    const intercept = rest.includes("--intercept");
-    const passArgs = rest.filter((a) => a !== "--live" && a !== "--intercept");
-    void runCommand(cmd, passArgs, { live, intercept });
+    // Everything after the agent name passes through to the agent.
+    void runCommand(cmd, rest);
     return;
   }
 
